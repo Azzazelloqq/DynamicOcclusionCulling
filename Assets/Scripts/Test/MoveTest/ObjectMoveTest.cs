@@ -17,10 +17,10 @@ public class ObjectMoveTest : DocBehaviour
         isUseUpdate = true;
     }
 
-    // private void Update()
-    // {
-    //     MoveCubeTest(Time.deltaTime);
-    // }
+    private void Update()
+    {
+        MoveCubeTest(Time.deltaTime);
+    }
 
     protected override void OnUpdate(float deltaTime)
     {

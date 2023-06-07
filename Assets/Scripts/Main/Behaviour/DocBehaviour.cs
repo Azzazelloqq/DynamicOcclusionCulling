@@ -1,5 +1,6 @@
 ﻿using System;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace Main.Behaviour
 {
@@ -8,9 +9,11 @@ public abstract class DocBehaviour : MonoBehaviour
 {
     protected bool isUseUpdate;
     protected bool isUseLateUpdate;
-    protected Action onVisible;
-    protected Action onInvisible;
-    protected bool isVisible;
+    protected bool disableObjectOnInvisible;
+    protected bool disableAnimatorOnInvisible;
+    private bool _isVisible;
+    private Action _onVisible;
+    private Action _onInvisible;
     private float _updateDeltaTime;
     private float _lateUpdateDeltaTime;
     private Renderer _renderer;
@@ -19,6 +22,24 @@ public abstract class DocBehaviour : MonoBehaviour
     protected DocBehaviour()
     {
         DocBehaviourExecutor.Behaviours.Add(this);
+        _onVisible += OnVisible;
+        _onInvisible += OnInvisible;
+    }
+
+    protected virtual void OnVisible()
+    {
+        if (disableObjectOnInvisible && gameObject.activeSelf)
+        {
+            gameObject.SetActive(false);
+        }
+    }
+
+    protected virtual void OnInvisible()
+    {
+        if (disableAnimatorOnInvisible && !gameObject.activeSelf)
+        {
+            gameObject.SetActive(true);
+        }
     }
 
     public void UpdateTick(float deltaTime)
@@ -28,7 +49,7 @@ public abstract class DocBehaviour : MonoBehaviour
             _renderer = GetComponent<Renderer>();
         }
         
-        UpdateVisible(_renderer.isVisible);
+        UpdateVisible(IsVisible(_renderer, DocSettingsContainer.Cameras));
         
         InvokeUpdate(deltaTime);
     }
@@ -37,6 +58,7 @@ public abstract class DocBehaviour : MonoBehaviour
     {
         if(!isUseUpdate) return;
 
+        Profiler.BeginSample("Doc behaviour. InvokeUpdate()");
         _updateDeltaTime += deltaTime;
 
         if (!_renderer.isVisible)
@@ -52,6 +74,7 @@ public abstract class DocBehaviour : MonoBehaviour
             OnUpdate(_updateDeltaTime);
             _updateDeltaTime = 0f;
         }
+        Profiler.EndSample();
     }
 
     public void LateUpdateTick(float deltaTime)
@@ -60,7 +83,7 @@ public abstract class DocBehaviour : MonoBehaviour
         
         _lateUpdateDeltaTime += deltaTime;
 
-        if (!isVisible)
+        if (!_isVisible)
         {
             if (Time.frameCount % DocSettingsContainer.FrameDivisor == 0)
             {
@@ -75,21 +98,54 @@ public abstract class DocBehaviour : MonoBehaviour
         }
     }
 
-    private void UpdateVisible(bool isVisible)
+    //TODO: optimize GeometryUtility.CalculateFrustumPlanes. It's to much GC.Alloc
+    private bool IsVisible(Renderer renderer, Camera[] cameras)
     {
-        if (this.isVisible != isVisible)
+        var wasActive = gameObject.activeSelf;
+
+        if (!wasActive)
         {
-            if (isVisible)
+            gameObject.SetActive(true);
+        }
+
+        var bounds = renderer.bounds;
+
+        var isVisibleByAnyCamera = false;
+
+        foreach (var cam in cameras)
+        {
+            var calculateFrustumPlanes = GeometryUtility.CalculateFrustumPlanes(cam);
+            isVisibleByAnyCamera = GeometryUtility.TestPlanesAABB(calculateFrustumPlanes, bounds);
+
+            if (isVisibleByAnyCamera)
             {
-                onVisible?.Invoke();
-            }
-            else
-            {
-                onInvisible?.Invoke();
+                break;
             }
         }
 
-        this.isVisible = isVisible;
+        if (!wasActive)
+        {
+            gameObject.SetActive(false);
+        }
+        
+        return isVisibleByAnyCamera;
+    }
+
+    private void UpdateVisible(bool newVisibilityState)
+    {
+        if (_isVisible != newVisibilityState)
+        {
+            if (newVisibilityState)
+            {
+                _onVisible?.Invoke();
+            }
+            else
+            {
+                _onInvisible?.Invoke();
+            }
+        }
+
+        _isVisible = newVisibilityState;
     }
 
     #region BehaviourLifeTimea
@@ -101,19 +157,12 @@ public abstract class DocBehaviour : MonoBehaviour
     protected virtual void OnLateUpdate(float deltaTime)
     {
     }
-    //
-    // protected virtual void OnVisible()
-    // {
-    //     _isVisible = true;
-    //     Debug.Log("OnVisible");
-    // }
-    //
-    // protected virtual void OnInvisible()
-    // {
-    //     _isVisible = false;
-    //     Debug.Log("OnInvisible");
-    //
-    // }
+    
+    protected virtual void OnDestroy()
+    {
+        _onVisible -= OnVisible;
+        _onInvisible -= OnInvisible;
+    }
 
     #endregion
 }

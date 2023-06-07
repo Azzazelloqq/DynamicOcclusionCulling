@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b42eec099667c944fa6e2d7799d69a89, type: 3}
   m_Name: SettingsTest
   m_EditorClassIdentifier: 
-  <FrameDivisor>k__BackingField: 5
+  <FrameDivisor>k__BackingField: 10

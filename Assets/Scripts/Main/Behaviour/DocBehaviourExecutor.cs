@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace Main.Behaviour
 {
@@ -10,6 +11,7 @@ public class DocBehaviourExecutor : MonoBehaviour
 
     private void Update()
     {
+        Profiler.BeginSample("Doc behaviour executor. Update()");
         foreach (var behaviour in Behaviours)
         {
             if (behaviour != null)
@@ -17,6 +19,7 @@ public class DocBehaviourExecutor : MonoBehaviour
                 behaviour.UpdateTick(Time.deltaTime);
             }
         }
+        Profiler.EndSample();
     }
 
     private void LateUpdate()

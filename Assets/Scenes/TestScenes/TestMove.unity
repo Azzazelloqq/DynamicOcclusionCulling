@@ -16377,6 +16377,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _docSettings: {fileID: 11400000, guid: 0b821333babf8324e84b1d283f795030, type: 2}
+  _cameras:
+  - {fileID: 1782582558}
 --- !u!4 &310685193
 Transform:
   m_ObjectHideFlags: 0
