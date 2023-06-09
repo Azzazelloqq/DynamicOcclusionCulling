@@ -1,29 +1,45 @@
 ﻿using System;
 using UnityEngine;
-using UnityEngine.Profiling;
 
 namespace Main.Behaviour
 {
 [RequireComponent(typeof(Renderer))]
 public abstract class DocBehaviour : MonoBehaviour
 {
+    public bool ObjectDisabledByDoc { get; private set; }
     protected bool isUseUpdate;
     protected bool isUseLateUpdate;
     protected bool disableObjectOnInvisible;
     protected bool disableAnimatorOnInvisible;
     private bool _isVisible;
+    private bool _isObjectWasActive;
+    private bool _isAnimatorWasEnabled;
     private Action _onVisible;
     private Action _onInvisible;
     private float _updateDeltaTime;
     private float _lateUpdateDeltaTime;
     private Renderer _renderer;
     private bool _lastVisible;
+    private readonly Plane[] _frustumPlanes = new Plane[6];
+    private Animator _animator;
 
     protected DocBehaviour()
     {
         DocBehaviourExecutor.Behaviours.Add(this);
         _onVisible += OnVisible;
         _onInvisible += OnInvisible;
+    }
+
+    protected virtual void Awake()
+    {
+        _animator = GetComponent<Animator>();
+
+        if (_animator != null)
+        {
+            _isAnimatorWasEnabled = _animator.enabled;
+        }
+
+        _isObjectWasActive = gameObject.activeSelf;
     }
 
     protected virtual void OnVisible()
@@ -54,11 +70,43 @@ public abstract class DocBehaviour : MonoBehaviour
         InvokeUpdate(deltaTime);
     }
 
+    public void LateUpdateTick(float deltaTime)
+    {
+        if (_renderer == null)
+        {
+            _renderer = GetComponent<Renderer>();
+        }
+        
+        UpdateVisible(IsVisible(_renderer, DocSettingsContainer.Cameras));
+        
+        InvokeLateUpdate(deltaTime);
+    }
+
+    private void InvokeLateUpdate(float deltaTime)
+    {
+        if(!isUseLateUpdate) return;
+        
+        _lateUpdateDeltaTime += deltaTime;
+
+        if (!_isVisible)
+        {
+            if (Time.frameCount % DocSettingsContainer.FrameDivisor == 0)
+            {
+                OnLateUpdate(_lateUpdateDeltaTime);
+                _lateUpdateDeltaTime = 0f;
+            }
+        }
+        else
+        {
+            OnLateUpdate(_lateUpdateDeltaTime);
+            _lateUpdateDeltaTime = 0f;
+        }
+    }
+    
     private void InvokeUpdate(float deltaTime)
     {
         if(!isUseUpdate) return;
 
-        Profiler.BeginSample("Doc behaviour. InvokeUpdate()");
         _updateDeltaTime += deltaTime;
 
         if (!_renderer.isVisible)
@@ -74,39 +122,11 @@ public abstract class DocBehaviour : MonoBehaviour
             OnUpdate(_updateDeltaTime);
             _updateDeltaTime = 0f;
         }
-        Profiler.EndSample();
     }
 
-    public void LateUpdateTick(float deltaTime)
-    {
-        if(!isUseLateUpdate) return;
-        
-        _lateUpdateDeltaTime += deltaTime;
-
-        if (!_isVisible)
-        {
-            if (Time.frameCount % DocSettingsContainer.FrameDivisor == 0)
-            {
-                OnUpdate(_lateUpdateDeltaTime);
-                _lateUpdateDeltaTime = 0f;
-            }
-        }
-        else
-        {
-            OnUpdate(_lateUpdateDeltaTime);
-            _lateUpdateDeltaTime = 0f;
-        }
-    }
-
-    //TODO: optimize GeometryUtility.CalculateFrustumPlanes. It's to much GC.Alloc
     private bool IsVisible(Renderer renderer, Camera[] cameras)
     {
-        var wasActive = gameObject.activeSelf;
-
-        if (!wasActive)
-        {
-            gameObject.SetActive(true);
-        }
+        if (cameras == null) return false;
 
         var bounds = renderer.bounds;
 
@@ -114,8 +134,19 @@ public abstract class DocBehaviour : MonoBehaviour
 
         foreach (var cam in cameras)
         {
-            var calculateFrustumPlanes = GeometryUtility.CalculateFrustumPlanes(cam);
-            isVisibleByAnyCamera = GeometryUtility.TestPlanesAABB(calculateFrustumPlanes, bounds);
+            GeometryUtility.CalculateFrustumPlanes(cam, _frustumPlanes);
+            isVisibleByAnyCamera = GeometryUtility.TestPlanesAABB(_frustumPlanes, bounds);
+            // foreach (var plane in _frustumPlanes)
+            // {
+            //     var distanceToPoint = plane.GetDistanceToPoint(bounds.center);
+            //     if (distanceToPoint < 0)
+            //     {
+            //         isVisibleByAnyCamera = false;
+            //         break;
+            //     }
+            //
+            //     isVisibleByAnyCamera = true;
+            // }
 
             if (isVisibleByAnyCamera)
             {
@@ -123,11 +154,6 @@ public abstract class DocBehaviour : MonoBehaviour
             }
         }
 
-        if (!wasActive)
-        {
-            gameObject.SetActive(false);
-        }
-        
         return isVisibleByAnyCamera;
     }
 
@@ -146,6 +172,71 @@ public abstract class DocBehaviour : MonoBehaviour
         }
 
         _isVisible = newVisibilityState;
+        
+        UpdateActive(_isVisible);
+        UpdateAnimatorActive(_isVisible);
+    }
+
+    private void UpdateAnimatorActive(bool isVisible)
+    {
+        if(_animator == null) return; 
+        
+        if (!isVisible)
+        {
+            _isAnimatorWasEnabled = _animator.enabled;
+            _animator.enabled = false;
+        }
+        else
+        {
+            _animator.enabled = _isAnimatorWasEnabled;
+        }
+    }
+
+    private void UpdateActive(bool isVisible)
+    {
+        if (!ObjectDisabledByDoc)
+        {
+            _isObjectWasActive = gameObject.activeSelf;
+        }
+
+        if (!isVisible)
+        {
+            if (_isObjectWasActive)
+            {
+                DisableObject();
+            }
+        }
+        else
+        {
+            if (!gameObject.activeSelf)
+            {
+                SetObjectActiveByDoc(_isObjectWasActive);
+            }
+        }
+    }
+
+    private void SetObjectActiveByDoc(bool isActive)
+    {
+        if (isActive)
+        {
+            EnableObject();
+        }
+        else
+        {
+            DisableObject();
+        }
+    }
+
+    private void DisableObject()
+    {
+        ObjectDisabledByDoc = true;
+        gameObject.SetActive(false);
+    }
+
+    private void EnableObject()
+    {
+        ObjectDisabledByDoc = false;
+        gameObject.SetActive(true);
     }
 
     #region BehaviourLifeTimea

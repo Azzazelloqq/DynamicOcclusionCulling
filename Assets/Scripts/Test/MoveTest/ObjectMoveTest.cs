@@ -11,16 +11,17 @@ public class ObjectMoveTest : DocBehaviour
     private Vector3 _startMovePosition;
     private bool _isMoveUp;
 
-    protected void Awake()
+    protected override void Awake()
     {
+        base.Awake();
         _startMovePosition = transform.position;
         isUseUpdate = true;
     }
 
-    private void Update()
-    {
-        MoveCubeTest(Time.deltaTime);
-    }
+    // private void Update()
+    // {
+    //     MoveCubeTest(Time.deltaTime);
+    // }
 
     protected override void OnUpdate(float deltaTime)
     {

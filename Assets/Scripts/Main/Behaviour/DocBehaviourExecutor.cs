@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using TMPro.EditorUtilities;
 using UnityEngine;
 using UnityEngine.Profiling;
 
@@ -16,7 +17,12 @@ public class DocBehaviourExecutor : MonoBehaviour
         {
             if (behaviour != null)
             {
-                behaviour.UpdateTick(Time.deltaTime);
+                var isActive = behaviour.gameObject.activeSelf || behaviour.ObjectDisabledByDoc;
+
+                if (isActive)
+                {
+                    behaviour.UpdateTick(Time.deltaTime);
+                }
             }
         }
         Profiler.EndSample();
@@ -28,7 +34,11 @@ public class DocBehaviourExecutor : MonoBehaviour
         {
             if (behaviour != null)
             {
-                behaviour.LateUpdateTick(Time.deltaTime);
+                var isActive = behaviour.gameObject.activeSelf || behaviour.ObjectDisabledByDoc;
+                if (isActive)
+                {
+                    behaviour.LateUpdateTick(Time.deltaTime);
+                }
             }
         }
     }
